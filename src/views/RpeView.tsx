@@ -109,6 +109,15 @@ export const RpeView: React.FC = () => {
     setRpeData(rpe);
   }, [rpe]);
 
+  // Persist selected teaching days so PrintModal & Pusat Unduh always read live schedule
+  useEffect(() => {
+    try {
+      localStorage.setItem('guru_selected_teaching_days_v1', JSON.stringify(selectedDays));
+    } catch {
+      // ignore storage issues
+    }
+  }, [selectedDays]);
+
   const s1Totals = calculateRpeTotals(
     rpeData.semester1.months,
     rpeData.semester1.jpPerWeek,
@@ -393,14 +402,18 @@ export const RpeView: React.FC = () => {
   };
 
   const handleExportWord = async () => {
-    updateRpe(rpeData);
-    await exportRpeToWord(
-      rpeData,
-      schoolProfile,
-      `RPE_${schoolProfile.subject.replace(/\s+/g, '_')}_${schoolProfile.academicYear.replace('/', '-')}.docx`,
-      { kaldikEvents, prota, promes, selectedDays }
-    );
-    showNotification('success', 'Dokumen Kalender & RPE lengkap (12 Bulan, Smt 1 & 2, TP, Kaldik) berhasil diunduh ke Word (.docx)!');
+    try {
+      updateRpe(rpeData, true);
+      await exportRpeToWord(
+        rpeData,
+        schoolProfile,
+        `RPE_${schoolProfile.subject.replace(/\s+/g, '_')}_${schoolProfile.academicYear.replace('/', '-')}.docx`,
+        { kaldikEvents, prota, promes, selectedDays }
+      );
+      showNotification('success', 'Dokumen Kalender & RPE lengkap (12 Bulan, Smt 1 & 2, TP, Kaldik) berhasil diunduh ke Word (.docx)!');
+    } catch (err: any) {
+      showNotification('error', `Gagal mengunduh dokumen Word: ${err?.message || 'Terjadi kesalahan saat menyusun berkas.'}`);
+    }
   };
 
   return (
@@ -486,14 +499,18 @@ export const RpeView: React.FC = () => {
 
           <button
             onClick={() => {
-              updateRpe(rpeData);
-              exportRpeToExcel(rpeData, schoolProfile, {
-                kaldikEvents,
-                prota,
-                promes,
-                selectedDays,
-              });
-              showNotification('success', 'Dokumen lengkap Kalender & RPE (12 Bulan, Smt 1 & 2, TP, Kaldik) berhasil diekspor ke Excel (.xlsx)!');
+              try {
+                updateRpe(rpeData, true);
+                exportRpeToExcel(rpeData, schoolProfile, {
+                  kaldikEvents,
+                  prota,
+                  promes,
+                  selectedDays,
+                });
+                showNotification('success', 'Dokumen lengkap Kalender & RPE (12 Bulan, Smt 1 & 2, TP, Kaldik) berhasil diekspor ke Excel (.xlsx)!');
+              } catch (err: any) {
+                showNotification('error', `Gagal mengekspor Excel: ${err?.message || 'Terjadi kesalahan.'}`);
+              }
             }}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-xs font-semibold transition-colors cursor-pointer"
             title="Ekspor seluruh dokumen Kalender & RPE ke Excel (.xlsx)"
@@ -512,7 +529,7 @@ export const RpeView: React.FC = () => {
 
           <button
             onClick={() => {
-              updateRpe(rpeData);
+              updateRpe(rpeData, true);
               openPrintModal('rpe');
             }}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors cursor-pointer"

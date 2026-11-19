@@ -93,7 +93,7 @@ interface AppContextType {
   updateTujuanPembelajaran: (tp: TujuanPembelajaran) => void;
   addTujuanPembelajaran: (tp: TujuanPembelajaran) => void;
   deleteTujuanPembelajaran: (id: string) => void;
-  updateRpe: (newRpe: RpeState) => void;
+  updateRpe: (newRpe: RpeState, silent?: boolean) => void;
   updateProtaItem: (item: ProtaItem) => void;
   setAllProtaItems: (items: ProtaItem[]) => void;
   addProtaItem: (item: ProtaItem) => void;
@@ -445,9 +445,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showNotification('info', 'Tujuan Pembelajaran telah dihapus.');
   };
 
-  const updateRpe = (newRpe: RpeState) => {
+  const updateRpe = (newRpe: RpeState, silent: boolean = false) => {
     setRpe(newRpe);
-    showNotification('success', 'Analisis RPE (Pekan Efektif & JP) berhasil diperbarui.');
+    if (!silent) {
+      showNotification('success', 'Analisis RPE (Pekan Efektif & JP) berhasil diperbarui.');
+    }
   };
 
   const updateProtaItem = (item: ProtaItem) => {

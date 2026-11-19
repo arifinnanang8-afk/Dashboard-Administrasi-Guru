@@ -34,6 +34,9 @@ import {
   ensureOfficialKemendikdasmenModul,
   getSubjectRasionalAndCpElements,
   buildUnifiedRpeExportPayload,
+  formatKaldikCategoryExportLabel,
+  getIndonesianMonthYearLabel,
+  formatDateRangeLabelId,
   TeachingDayName,
 } from './curriculumLogic';
 import { getTenAssessmentInstruments } from './assessmentInstruments';
@@ -795,25 +798,64 @@ export function exportProtaToExcel(prota: ProtaItem[], profile: SchoolProfile) {
       `PROGRAM TAHUNAN (PROTA) - TAHUN AJARAN ${profile.academicYear}`,
       `${profile.academicYear} / Semester 1 & 2 (1 Tahun Penuh)`
     ),
-    ['No', 'Semester', 'Bab / Lingkup Materi', 'Kode TP', 'Tujuan Pembelajaran', 'Alokasi (JP)', 'Keterangan'],
+    [
+      'No',
+      'Semester',
+      'Bab / Lingkup Materi',
+      'Kode TP',
+      'Tujuan Pembelajaran',
+      'Jml Pertemuan',
+      'Alokasi (JP)',
+      'Perkiraan Bulan',
+      'Keterangan',
+    ],
   ];
 
-  const rows = prota.map((item, idx) => [
-    idx + 1,
-    `Semester ${item.semester}`,
-    item.babTitle,
-    item.tpCode,
-    item.tpDescription,
-    item.alokasiJp,
-    item.keterangan,
-  ]);
+  const rows = prota.map((item, idx) => {
+    const meetings =
+      item.jmlPertemuan !== undefined
+        ? item.jmlPertemuan
+        : Math.max(0, Math.round((Number(item.alokasiJp) || 0) / 2));
+    return [
+      idx + 1,
+      `Semester ${item.semester}`,
+      item.babTitle,
+      item.tpCode,
+      item.tpDescription,
+      meetings,
+      item.alokasiJp,
+      item.perkiraanBulan || `Semester ${item.semester}`,
+      item.keterangan,
+    ];
+  });
 
-  const totalJp = prota.reduce((acc, p) => acc + p.alokasiJp, 0);
-  rows.push(['', '', 'TOTAL ALOKASI JAM PELAJARAN 1 TAHUN', '', '', totalJp, 'Sinkron Kalender & RPE']);
+  const totalMeetings = rows.reduce((acc, r) => acc + (Number(r[5]) || 0), 0);
+  const totalJp = prota.reduce((acc, p) => acc + (Number(p.alokasiJp) || 0), 0);
+  rows.push([
+    '',
+    '',
+    'TOTAL ALOKASI JAM PELAJARAN 1 TAHUN',
+    '',
+    '',
+    totalMeetings,
+    totalJp,
+    'Sinkron Kalender & RPE',
+    '',
+  ]);
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([...header, ...rows]);
-  ws['!cols'] = [{ wch: 4 }, { wch: 14 }, { wch: 35 }, { wch: 10 }, { wch: 52 }, { wch: 12 }, { wch: 26 }];
+  ws['!cols'] = [
+    { wch: 4 },
+    { wch: 13 },
+    { wch: 34 },
+    { wch: 12 },
+    { wch: 48 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 24 },
+    { wch: 24 },
+  ];
   XLSX.utils.book_append_sheet(wb, ws, 'PROTA 1 Tahun');
   XLSX.writeFile(wb, `PROTA_${profile.subject.replace(/\s+/g, '_')}_${profile.academicYear.replace('/', '-')}.xlsx`);
 }
@@ -1311,26 +1353,29 @@ export function exportRpeToExcel(
  * Exports Kalender Pendidikan (Kaldik) to Excel spreadsheet
  */
 export function exportKaldikToExcel(events: KaldikEvent[], profile: SchoolProfile) {
+  const sortedEvents = [...events].sort((a, b) =>
+    (a.dateStart || '').localeCompare(b.dateStart || '')
+  );
   const data: any[][] = [
     ...getExcelIdentityHeader(
       profile,
       `KALENDER PENDIDIKAN (KALDIK) TAHUN AJARAN ${profile.academicYear}`,
-      `${profile.academicYear} / Semester 1 & 2`
+      `${profile.academicYear} / Semester 1 & 2 (${sortedEvents.length} Agenda)`
     ),
-    ['No', 'Nama Agenda / Kegiatan Akademik', 'Tanggal Mulai', 'Tanggal Selesai', 'Kategori Agenda', 'Keterangan / Dampak KBM'],
-    ...events.map((ev, idx) => [
+    ['No', 'Bulan', 'Rentang Tanggal', 'Uraian Kegiatan / Hari Libur', 'Kategori Status', 'Keterangan / Dampak KBM'],
+    ...sortedEvents.map((ev, idx) => [
       idx + 1,
+      getIndonesianMonthYearLabel(ev.dateStart),
+      formatDateRangeLabelId(ev.dateStart, ev.dateEnd),
       ev.name,
-      ev.dateStart,
-      ev.dateEnd,
-      ev.type.replace(/_/g, ' ').toUpperCase(),
+      formatKaldikCategoryExportLabel(ev.type),
       ev.notes || '-',
     ]),
   ];
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{ wch: 5 }, { wch: 38 }, { wch: 16 }, { wch: 16 }, { wch: 22 }, { wch: 40 }];
+  ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 24 }, { wch: 42 }, { wch: 28 }, { wch: 38 }];
   XLSX.utils.book_append_sheet(wb, ws, 'Kalender Pendidikan');
   XLSX.writeFile(
     wb,
@@ -1787,20 +1832,28 @@ export function exportMasterBundelToExcel(data: {
   const { profile, cpElements, tujuanPembelajaran, rpe, prota, promes, modulAjarList, lkpdList, students, kaldikEvents } = data;
   const wb = XLSX.utils.book_new();
 
+  const rpePayload = buildUnifiedRpeExportPayload({
+    rpe,
+    academicYear: profile.academicYear,
+    kaldikEvents,
+    prota,
+    promes,
+  });
+
   // Sheet 1: Identitas & Daftar Isi
   const sheet1 = XLSX.utils.aoa_to_sheet([
     ...getExcelIdentityHeader(profile, 'BUNDEL LENGKAP PERANGKAT PEMBELAJARAN 1 TAHUN (MASTER EXCEL)'),
-    ['No', 'Nama Dokumen Administrasi', 'Status Kelengkapan'],
-    ['1', 'Kalender Pendidikan (Kaldik)', `${kaldikEvents.length} Agenda Akademik`],
-    ['2', 'Rincian Pekan Efektif (RPE)', 'Semester 1 & Semester 2 Sinkron'],
+    ['No', 'Nama Dokumen Administrasi', 'Status Kelengkapan (Tersinkron)'],
+    ['1', 'Kalender Pendidikan (Kaldik)', `${rpePayload.kaldikRows.length} Agenda Akademik · Jadwal: ${rpePayload.selectedDays.join(', ')}`],
+    ['2', 'Rincian Pekan Efektif (RPE 12 Bulan, Smt 1 & 2)', `${rpePayload.annualSummary.effectiveWeeks} Pekan · ${rpePayload.annualSummary.effectiveMeetings} Pertemuan · ${rpePayload.annualSummary.grossJp} JP (${rpePayload.annualSummary.netJp} JP Bersih)`],
     ['3', 'Analisis CP & ATP (BSKAP 046/2025)', `${tujuanPembelajaran.length} Tujuan Pembelajaran`],
-    ['4', 'Program Tahunan (PROTA)', `${prota.reduce((a, b) => a + b.alokasiJp, 0)} JP (1 Tahun)`],
+    ['4', 'Program Tahunan (PROTA) & Alokasi Waktu TP', `${rpePayload.tpSummary.totalAllocatedJp} JP (${rpePayload.tpSummary.totalMeetings} Pertemuan)`],
     ['5', 'Program Semester (PROMES)', `${promes.length} Unit Sebaran Mingguan`],
     ['6', 'Modul Ajar Deep Learning', `${modulAjarList.length} Bab Modul Ajar`],
     ['7', 'Lembar Kerja Peserta Didik (LKPD)', `${lkpdList.length} Bab LKPD`],
     ['8', 'Rekap Nilai Asesmen & Rapor', `${students.length} Siswa`],
   ]);
-  sheet1['!cols'] = [{ wch: 8 }, { wch: 38 }, { wch: 30 }];
+  sheet1['!cols'] = [{ wch: 8 }, { wch: 44 }, { wch: 48 }];
   XLSX.utils.book_append_sheet(wb, sheet1, '1. Identitas & Daftar Isi');
 
   // Sheet 2: CP & ATP
@@ -1828,51 +1881,184 @@ export function exportMasterBundelToExcel(data: {
   sheet2['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 14 }, { wch: 24 }, { wch: 45 }, { wch: 35 }, { wch: 28 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, sheet2, '2. Analisis CP & ATP');
 
-  // Sheet 3: RPE & Kaldik
+  // Sheet 3: Analisis 12 Bulan & RPE (Sinkron 3 Tabel)
   const sheet3 = XLSX.utils.aoa_to_sheet([
-    ...getExcelIdentityHeader(profile, 'RINCIAN PEKAN EFEKTIF (RPE) & KALDIK'),
-    ['SEMESTER 1 (GANJIL)'],
-    ['Bulan', 'Total Pekan', 'Pekan Tidak Efektif', 'Pekan Efektif', 'JP Efektif', 'Keterangan'],
-    ...rpe.semester1.months.map((m) => [
-      m.month,
-      m.totalWeeks,
-      m.nonEffectiveWeeks,
-      m.effectiveWeeks,
-      m.effectiveWeeks * rpe.semester1.jpPerWeek,
-      m.nonEffectiveNote,
+    ...getExcelIdentityHeader(
+      profile,
+      'ANALISIS MINGGU EFEKTIF (12 BULAN) & DISTRIBUSI PEKAN SEMESTER 1-2',
+      `${profile.academicYear} · Jadwal Mengajar: ${rpePayload.selectedDays.join(', ')}`
+    ),
+    ['I. ANALISIS MINGGU EFEKTIF & HARI/PERTEMUAN EFEKTIF (12 BULAN)'],
+    ['No', 'Bulan', 'Jml Minggu', 'Tidak Efektif', 'Minggu Efektif', 'Pertemuan Efektif', 'Total JP Efektif', 'Keterangan / Agenda'],
+    ...rpePayload.twelveMonthRows.map((row) => [
+      row.no,
+      row.month,
+      row.totalWeeks,
+      row.nonEffectiveWeeks,
+      row.effectiveWeeks,
+      row.effectiveMeetings,
+      row.effectiveJp,
+      row.note,
+    ]),
+    [
+      '',
+      'JUMLAH TOTAL (12 BULAN)',
+      rpePayload.annualSummary.totalWeeks,
+      rpePayload.annualSummary.nonEffectiveWeeks,
+      rpePayload.annualSummary.effectiveWeeks,
+      rpePayload.annualSummary.effectiveMeetings,
+      rpePayload.annualSummary.grossJp,
+      `Bersih: ${rpePayload.annualSummary.netJp} JP (Cadangan ${rpePayload.annualSummary.cadanganJp} JP)`,
+    ],
+    [],
+    ['II. DISTRIBUSI PEKAN SEMESTER 1 (GANJIL)'],
+    ['No', 'Nama Bulan', 'Jml Pekan', 'Non-Efektif', 'Pekan Efektif', 'Pertemuan', 'JP Efektif', 'Keterangan'],
+    ...rpePayload.s1Rows.map((row) => [
+      row.semNo,
+      row.month,
+      row.totalWeeks,
+      row.nonEffectiveWeeks,
+      row.effectiveWeeks,
+      row.effectiveMeetings,
+      row.effectiveJp,
+      row.note,
+    ]),
+    [
+      '',
+      'TOTAL SEMESTER 1',
+      rpePayload.s1Summary.totalWeeks,
+      rpePayload.s1Summary.nonEffectiveWeeks,
+      rpePayload.s1Summary.effectiveWeeks,
+      rpePayload.s1Summary.effectiveMeetings,
+      rpePayload.s1Summary.grossJp,
+      `Bersih: ${rpePayload.s1Summary.netJp} JP (Cadangan ${rpePayload.s1Summary.cadanganJp} JP)`,
+    ],
+    [],
+    ['III. DISTRIBUSI PEKAN SEMESTER 2 (GENAP)'],
+    ['No', 'Nama Bulan', 'Jml Pekan', 'Non-Efektif', 'Pekan Efektif', 'Pertemuan', 'JP Efektif', 'Keterangan'],
+    ...rpePayload.s2Rows.map((row) => [
+      row.semNo,
+      row.month,
+      row.totalWeeks,
+      row.nonEffectiveWeeks,
+      row.effectiveWeeks,
+      row.effectiveMeetings,
+      row.effectiveJp,
+      row.note,
+    ]),
+    [
+      '',
+      'TOTAL SEMESTER 2',
+      rpePayload.s2Summary.totalWeeks,
+      rpePayload.s2Summary.nonEffectiveWeeks,
+      rpePayload.s2Summary.effectiveWeeks,
+      rpePayload.s2Summary.effectiveMeetings,
+      rpePayload.s2Summary.grossJp,
+      `Bersih: ${rpePayload.s2Summary.netJp} JP (Cadangan ${rpePayload.s2Summary.cadanganJp} JP)`,
+    ],
+  ]);
+  sheet3['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 13 }, { wch: 14 }, { wch: 15 }, { wch: 17 }, { wch: 15 }, { wch: 44 }];
+  XLSX.utils.book_append_sheet(wb, sheet3, '3. Analisis 12 Bln & RPE');
+
+  // Sheet 4: PROTA & Program Alokasi Waktu TP
+  const sheet4 = XLSX.utils.aoa_to_sheet([
+    ...getExcelIdentityHeader(
+      profile,
+      'PROGRAM TAHUNAN (PROTA) & ALOKASI WAKTU TUJUAN PEMBELAJARAN (TP)',
+      `Target Total JP Efektif Kaldik: ${rpePayload.tpSummary.targetEffectiveJp} JP`
+    ),
+    ['No', 'Semester', 'Kode / Jenis', 'Lingkup Materi & Tujuan Pembelajaran (TP)', 'Jml Pertemuan', 'Alokasi JP', 'Perkiraan Bulan', 'Keterangan'],
+    ...rpePayload.tpRows.map((row) => {
+      const matched = prota[row.no - 1];
+      return [
+        row.no,
+        `Semester ${row.semester}`,
+        row.tpCode,
+        row.lingkupMateri,
+        row.jmlPertemuan,
+        row.alokasiJp,
+        row.perkiraanBulan,
+        matched?.keterangan || 'Formatif & Sumatif',
+      ];
+    }),
+    [
+      '',
+      '',
+      'TOTAL ALOKASI',
+      rpePayload.tpSummary.isBalanced
+        ? 'Seimbang (Pas dengan Total JP Efektif Kaldik)'
+        : `Selisih ${rpePayload.tpSummary.diffJp} JP terhadap Total JP Efektif`,
+      rpePayload.tpSummary.totalMeetings,
+      rpePayload.tpSummary.totalAllocatedJp,
+      `Terpakai: ${rpePayload.tpSummary.totalAllocatedJp} / ${rpePayload.tpSummary.targetEffectiveJp} JP`,
+      '',
+    ],
+  ]);
+  sheet4['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 18 }, { wch: 48 }, { wch: 14 }, { wch: 12 }, { wch: 24 }, { wch: 24 }];
+  XLSX.utils.book_append_sheet(wb, sheet4, '4. PROTA & Alokasi TP');
+
+  // Sheet 5: Jadwal Mengajar Riil & Agenda Kaldik
+  const sheet5 = XLSX.utils.aoa_to_sheet([
+    ...getExcelIdentityHeader(
+      profile,
+      `JADWAL MENGAJAR RIIL & AGENDA KALENDER PENDIDIKAN (${profile.academicYear})`,
+      `Hari Mengajar: ${rpePayload.selectedDays.join(', ')}`
+    ),
+    ['A. RINCIAN HARI TERJADWAL VS LIBUR KALDIK'],
+    ['No', 'Bulan', 'Hari Terjadwal', 'Terkena Libur Kaldik', 'Pertemuan Efektif', 'Keterangan Tanggal Terkena Agenda / Libur'],
+    ...rpePayload.twelveMonthRows.map((row) => [
+      row.no,
+      row.month,
+      row.scheduledCount,
+      row.holidayCount,
+      row.effectiveMeetings,
+      row.affectedSummary,
     ]),
     [],
-    ['SEMESTER 2 (GENAP)'],
-    ['Bulan', 'Total Pekan', 'Pekan Tidak Efektif', 'Pekan Efektif', 'JP Efektif', 'Keterangan'],
-    ...rpe.semester2.months.map((m) => [
-      m.month,
-      m.totalWeeks,
-      m.nonEffectiveWeeks,
-      m.effectiveWeeks,
-      m.effectiveWeeks * rpe.semester2.jpPerWeek,
-      m.nonEffectiveNote,
+    ['B. RINCIAN AGENDA & HARI LIBUR KALENDER PENDIDIKAN'],
+    ['No', 'Bulan', 'Rentang Tanggal', 'Uraian Kegiatan / Hari Libur', 'Kategori Status', 'Keterangan'],
+    ...rpePayload.kaldikRows.map((ev) => [
+      ev.no,
+      ev.monthLabel,
+      ev.dateRangeLabel,
+      ev.name,
+      ev.categoryLabel,
+      ev.notes,
     ]),
   ]);
-  sheet3['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 36 }];
-  XLSX.utils.book_append_sheet(wb, sheet3, '3. RPE & Kaldik');
+  sheet5['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 22 }, { wch: 38 }, { wch: 26 }, { wch: 46 }];
+  XLSX.utils.book_append_sheet(wb, sheet5, '5. Jadwal Riil & Kaldik');
 
-  // Sheet 4: PROTA
-  const sheet4 = XLSX.utils.aoa_to_sheet([
-    ...getExcelIdentityHeader(profile, 'PROGRAM TAHUNAN (PROTA)'),
-    ['No', 'Semester', 'Bab / Materi Pokok', 'Kode TP', 'Tujuan Pembelajaran', 'Alokasi JP', 'Keterangan'],
-    ...prota.map((p, i) => [i + 1, `Semester ${p.semester}`, p.babTitle, p.tpCode, p.tpDescription, p.alokasiJp, p.keterangan]),
+  // Sheet 6: PROMES Ringkasan Sebaran
+  const sheet6 = XLSX.utils.aoa_to_sheet([
+    ...getExcelIdentityHeader(profile, 'PROGRAM SEMESTER (PROMES) SEMESTER 1 & 2'),
+    ['No', 'Semester', 'Bab / Lingkup Materi', 'Kode TP', 'Alokasi JP', 'Sebaran Minggu Efektif'],
+    ...promes.map((pm, idx) => {
+      const distText = Object.entries(pm.distribution || {})
+        .filter(([, jp]) => Number(jp) > 0)
+        .map(([wk, jp]) => `${wk}: ${jp} JP`)
+        .join(', ');
+      return [
+        idx + 1,
+        `Semester ${pm.semester}`,
+        pm.babTitle,
+        pm.tpCode,
+        pm.alokasiJp,
+        distText || '-',
+      ];
+    }),
   ]);
-  sheet4['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 32 }, { wch: 12 }, { wch: 48 }, { wch: 12 }, { wch: 24 }];
-  XLSX.utils.book_append_sheet(wb, sheet4, '4. PROTA');
+  sheet6['!cols'] = [{ wch: 5 }, { wch: 12 }, { wch: 36 }, { wch: 12 }, { wch: 12 }, { wch: 54 }];
+  XLSX.utils.book_append_sheet(wb, sheet6, '6. PROMES');
 
-  // Sheet 5: Rekap Nilai Rapor
-  const sheet5 = XLSX.utils.aoa_to_sheet([
+  // Sheet 7: Rekap Nilai Rapor
+  const sheet7 = XLSX.utils.aoa_to_sheet([
     ...getExcelIdentityHeader(profile, 'REKAP NILAI ASESMEN & RAPOR SISWA'),
     ['No', 'NISN', 'Nama Siswa', 'L/P', 'Sumatif Akhir', 'Nilai Akhir Rapor', 'Predikat', 'Status KKTP', 'Deskripsi Capaian'],
     ...students.map((s, i) => [i + 1, s.nisn, s.name, s.gender, s.sumatifAkhir, s.nilaiAkhir, s.predikat, s.kktpStatus, s.deskripsi]),
   ]);
-  sheet5['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 28 }, { wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 48 }];
-  XLSX.utils.book_append_sheet(wb, sheet5, '5. Rekap Nilai Rapor');
+  sheet7['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 28 }, { wch: 6 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 48 }];
+  XLSX.utils.book_append_sheet(wb, sheet7, '7. Rekap Nilai Rapor');
 
   XLSX.writeFile(
     wb,
@@ -2818,7 +3004,14 @@ export async function exportCpAtpToWord(
  * 3. PROGRAM TAHUNAN (PROTA) - TABEL 7 KOLOM PERSIS LAYAR PREVIEW
  */
 export function buildProtaTable(prota: ProtaItem[]): Table {
-  const totalJp = prota.reduce((acc, p) => acc + (p.alokasiJp || 0), 0);
+  const totalJp = prota.reduce((acc, p) => acc + (Number(p.alokasiJp) || 0), 0);
+  const totalMeetings = prota.reduce((acc, p) => {
+    const m =
+      p.jmlPertemuan !== undefined
+        ? p.jmlPertemuan
+        : Math.max(0, Math.round((Number(p.alokasiJp) || 0) / 2));
+    return acc + m;
+  }, 0);
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -2827,29 +3020,36 @@ export function buildProtaTable(prota: ProtaItem[]): Table {
       new TableRow({
         tableHeader: true,
         children: [
-          makeCell('NO', { widthPct: 6, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
-          makeCell('SMT', { widthPct: 8, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
-          makeCell('BAB / LINGKUP MATERI', { widthPct: 24, bold: true, fill: '0F172A', color: 'FFFFFF' }),
-          makeCell('KODE TP', { widthPct: 11, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
-          makeCell('TUJUAN PEMBELAJARAN', { widthPct: 31, bold: true, fill: '0F172A', color: 'FFFFFF' }),
-          makeCell('ALOKASI (JP)', { widthPct: 9, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
-          makeCell('KETERANGAN', { widthPct: 11, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('NO', { widthPct: 5, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
+          makeCell('SMT', { widthPct: 7, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
+          makeCell('BAB / LINGKUP MATERI', { widthPct: 21, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('KODE TP', { widthPct: 10, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
+          makeCell('TUJUAN PEMBELAJARAN', { widthPct: 24, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('PERTEMUAN', { widthPct: 8, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
+          makeCell('ALOKASI (JP)', { widthPct: 8, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
+          makeCell('PERKIRAAN BULAN', { widthPct: 10, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('KETERANGAN', { widthPct: 7, bold: true, fill: '0F172A', color: 'FFFFFF' }),
         ],
       }),
-      ...prota.map(
-        (item, idx) =>
-          new TableRow({
-            children: [
-              makeCell(`${idx + 1}`, { widthPct: 6, align: AlignmentType.CENTER }),
-              makeCell(`Smt ${item.semester}`, { widthPct: 8, bold: true, align: AlignmentType.CENTER }),
-              makeCell(item.babTitle, { widthPct: 24, bold: true }),
-              makeCell(item.tpCode, { widthPct: 11, bold: true, color: '065F46', align: AlignmentType.CENTER }),
-              makeCell(item.tpDescription, { widthPct: 31 }),
-              makeCell(`${item.alokasiJp} JP`, { widthPct: 9, bold: true, align: AlignmentType.CENTER }),
-              makeCell(item.keterangan || 'Formatif & Sumatif', { widthPct: 11, italics: true }),
-            ],
-          })
-      ),
+      ...prota.map((item, idx) => {
+        const meetings =
+          item.jmlPertemuan !== undefined
+            ? item.jmlPertemuan
+            : Math.max(0, Math.round((Number(item.alokasiJp) || 0) / 2));
+        return new TableRow({
+          children: [
+            makeCell(`${idx + 1}`, { widthPct: 5, align: AlignmentType.CENTER }),
+            makeCell(`Smt ${item.semester}`, { widthPct: 7, bold: true, align: AlignmentType.CENTER }),
+            makeCell(item.babTitle, { widthPct: 21, bold: true }),
+            makeCell(item.tpCode, { widthPct: 10, bold: true, color: '065F46', align: AlignmentType.CENTER }),
+            makeCell(item.tpDescription, { widthPct: 24 }),
+            makeCell(`${meetings}`, { widthPct: 8, bold: true, align: AlignmentType.CENTER }),
+            makeCell(`${item.alokasiJp} JP`, { widthPct: 8, bold: true, color: '065F46', align: AlignmentType.CENTER }),
+            makeCell(item.perkiraanBulan || `Semester ${item.semester}`, { widthPct: 10 }),
+            makeCell(item.keterangan || 'Formatif & Sumatif', { widthPct: 7, italics: true }),
+          ],
+        });
+      }),
       new TableRow({
         children: [
           makeCell('TOTAL ALOKASI WAKTU 1 TAHUN AJARAN:', {
@@ -2859,6 +3059,12 @@ export function buildProtaTable(prota: ProtaItem[]): Table {
             color: '064E3B',
             align: AlignmentType.RIGHT,
           }),
+          makeCell(`${totalMeetings}`, {
+            bold: true,
+            fill: 'ECFDF5',
+            color: '064E3B',
+            align: AlignmentType.CENTER,
+          }),
           makeCell(`${totalJp} JP`, {
             bold: true,
             fill: 'ECFDF5',
@@ -2866,6 +3072,7 @@ export function buildProtaTable(prota: ProtaItem[]): Table {
             align: AlignmentType.CENTER,
           }),
           makeCell('✓ 100% Selaras RPE', {
+            colSpan: 2,
             bold: true,
             fill: 'ECFDF5',
             color: '065F46',
@@ -3624,20 +3831,9 @@ export async function exportRpeToWord(
  * 6. KALENDER PENDIDIKAN (KALDIK) - TABEL AGENDA RESMI PERSIS PREVIEW
  */
 export function buildKaldikTable(kaldikEvents: KaldikEvent[]): Table {
-  const formatCategory = (type: KaldikEvent['type']) => {
-    switch (type) {
-      case 'libur_nasional':
-        return 'Libur Nasional';
-      case 'libur_semester':
-        return 'Libur Semester';
-      case 'sts':
-        return 'STS (Sumatif Tengah Smt)';
-      case 'sas':
-        return 'SAS (Sumatif Akhir Smt)';
-      default:
-        return 'Kegiatan Sekolah';
-    }
-  };
+  const sortedEvents = [...kaldikEvents].sort((a, b) =>
+    (a.dateStart || '').localeCompare(b.dateStart || '')
+  );
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -3646,25 +3842,24 @@ export function buildKaldikTable(kaldikEvents: KaldikEvent[]): Table {
       new TableRow({
         tableHeader: true,
         children: [
-          makeCell('NO', { widthPct: 6, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
-          makeCell('RENTANG TANGGAL', { widthPct: 24, bold: true, fill: '0F172A', color: 'FFFFFF' }),
-          makeCell('NAMA AGENDA / KEGIATAN AKADEMIK', { widthPct: 34, bold: true, fill: '0F172A', color: 'FFFFFF' }),
-          makeCell('KATEGORI', { widthPct: 18, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
-          makeCell('KETERANGAN KHUSUS', { widthPct: 18, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('NO', { widthPct: 5, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
+          makeCell('BULAN', { widthPct: 14, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('RENTANG TANGGAL', { widthPct: 19, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('URAIAN KEGIATAN / HARI LIBUR', { widthPct: 29, bold: true, fill: '0F172A', color: 'FFFFFF' }),
+          makeCell('KATEGORI STATUS', { widthPct: 17, bold: true, fill: '0F172A', color: 'FFFFFF', align: AlignmentType.CENTER }),
+          makeCell('KETERANGAN', { widthPct: 16, bold: true, fill: '0F172A', color: 'FFFFFF' }),
         ],
       }),
-      ...kaldikEvents.map(
+      ...sortedEvents.map(
         (ev, idx) =>
           new TableRow({
             children: [
-              makeCell(`${idx + 1}`, { widthPct: 6, align: AlignmentType.CENTER }),
-              makeCell(
-                `${ev.dateStart}${ev.dateEnd && ev.dateEnd !== ev.dateStart ? ` s.d. ${ev.dateEnd}` : ''}`,
-                { widthPct: 24, bold: true }
-              ),
-              makeCell(ev.name, { widthPct: 34, bold: true }),
-              makeCell(formatCategory(ev.type), { widthPct: 18, bold: true, color: '065F46', align: AlignmentType.CENTER }),
-              makeCell(ev.notes || '-', { widthPct: 18, italics: true }),
+              makeCell(`${idx + 1}`, { widthPct: 5, align: AlignmentType.CENTER }),
+              makeCell(getIndonesianMonthYearLabel(ev.dateStart), { widthPct: 14, bold: true }),
+              makeCell(formatDateRangeLabelId(ev.dateStart, ev.dateEnd), { widthPct: 19 }),
+              makeCell(ev.name, { widthPct: 29, bold: true }),
+              makeCell(formatKaldikCategoryExportLabel(ev.type), { widthPct: 17, bold: true, color: '065F46', align: AlignmentType.CENTER }),
+              makeCell(ev.notes || '-', { widthPct: 16, italics: true }),
             ],
           })
       ),
@@ -5182,7 +5377,13 @@ export async function exportMasterBundelToWord(
     `BUNDEL_MASTER_LENGKAP_1TAHUN_${profile.subject.replace(/\s+/g, '_')}_${profile.academicYear.replace('/', '-')}.docx`;
 
   const { fourColGridTable, cpElementTable, atpTable } = buildCpAtpTables(cpElements, tujuanPembelajaran);
-  const { s1Table, s2Table } = buildRpeTables(
+  const {
+    twelveMonthTable,
+    s1Table,
+    s2Table,
+    tpDistributionTable,
+    realScheduleTable,
+  } = buildRpeTables(
     rpe,
     { kaldikEvents, prota, promes },
     profile.academicYear
@@ -5255,23 +5456,30 @@ export async function exportMasterBundelToWord(
           new Paragraph({ text: '', spacing: { after: 80 } }),
           matrix2DTable,
 
-          // III. KALENDER PENDIDIKAN & RPE
+          // III. KALENDER PENDIDIKAN, RPE 12 BULAN & PROGRAM ALOKASI WAKTU TP
           new Paragraph({
             spacing: { before: 180, after: 80 },
             children: [
               new TextRun({
-                text: 'BAGIAN III: KALENDER PENDIDIKAN & RINCIAN PEKAN EFEKTIF (RPE)',
+                text: 'BAGIAN III: KALENDER PENDIDIKAN, RINCIAN PEKAN EFEKTIF (RPE) & PROGRAM ALOKASI WAKTU TP',
                 bold: true,
                 size: 22,
                 font: 'Calibri',
               }),
             ],
           }),
-          buildKaldikTable(kaldikEvents),
+          twelveMonthTable,
           new Paragraph({ text: '', spacing: { after: 80 } }),
           s1Table,
           new Paragraph({ text: '', spacing: { after: 80 } }),
           s2Table,
+          ...(tpDistributionTable
+            ? [new Paragraph({ text: '', spacing: { after: 80 } }), tpDistributionTable]
+            : []),
+          new Paragraph({ text: '', spacing: { after: 80 } }),
+          realScheduleTable,
+          new Paragraph({ text: '', spacing: { after: 80 } }),
+          buildKaldikTable(kaldikEvents),
 
           // IV. PROTA & PROMES
           new Paragraph({

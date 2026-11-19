@@ -484,6 +484,13 @@ test('buildUnifiedRpeExportPayload combines 12-month analysis, semester tables, 
   assert.equal(payload.tpSummary.totalAllocatedJp, 156);
 });
 
-
-
-
+test('formatKaldikCategoryExportLabel maps all Kaldik event types to clean Indonesian labels without underscores', async () => {
+  const { formatKaldikCategoryExportLabel } = await import('./curriculumLogic');
+  assert.equal(formatKaldikCategoryExportLabel('libur_nasional'), 'Libur Nasional');
+  assert.equal(formatKaldikCategoryExportLabel('libur_semester'), 'Libur Semester / Akhir Tahun');
+  assert.equal(formatKaldikCategoryExportLabel('sts'), 'Asesmen Tengah Semester (ATS/STS)');
+  assert.equal(formatKaldikCategoryExportLabel('sas'), 'Asesmen Sumatif Akhir (ASAS/SAT)');
+  assert.equal(formatKaldikCategoryExportLabel('kegiatan_sekolah'), 'Kegiatan Khusus Sekolah');
+  assert.equal(formatKaldikCategoryExportLabel('hari_efektif'), 'Hari Efektif / Awal Masuk');
+  assert.equal(formatKaldikCategoryExportLabel('lainnya').includes('_'), false);
+});

@@ -2820,7 +2820,7 @@ export interface UnifiedRpeExportInput {
   selectedDays?: TeachingDayName[];
 }
 
-function formatKaldikCategoryExportLabel(type: string): string {
+export function formatKaldikCategoryExportLabel(type: string): string {
   switch (type) {
     case 'libur_nasional':
       return 'Libur Nasional';

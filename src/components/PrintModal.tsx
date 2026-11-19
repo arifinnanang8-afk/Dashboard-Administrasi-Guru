@@ -30,11 +30,15 @@ import {
 } from '../utils/exporter';
 import {
   calculateRpeTotals,
+  calculateBloomStats,
   getSyncedSubChaptersForBab,
   getCompleteBookSourceString,
   ensureOfficialKemendikdasmenModul,
   getSubjectRasionalAndCpElements,
   buildUnifiedRpeExportPayload,
+  formatKaldikCategoryExportLabel,
+  getIndonesianMonthYearLabel,
+  formatDateRangeLabelId,
 } from '../utils/curriculumLogic';
 import { getTenAssessmentInstruments } from '../utils/assessmentInstruments';
 
@@ -111,6 +115,15 @@ export const PrintModal: React.FC = () => {
   const currentModul = modulAjarList[0];
   const currentLkpd = lkpdList[0];
   const totalJp = tujuanPembelajaran.reduce((a, b) => a + b.jpAllocation, 0);
+  const totalProtaJp = prota.reduce((a, b) => a + (Number(b.alokasiJp) || 0), 0);
+  const bloomStats = calculateBloomStats(tujuanPembelajaran);
+  const unifiedRpeSnapshot = buildUnifiedRpeExportPayload({
+    rpe,
+    academicYear: schoolProfile.academicYear,
+    kaldikEvents,
+    prota,
+    promes,
+  });
   const s1RpeTotals = calculateRpeTotals(
     rpe.semester1.months,
     rpe.semester1.jpPerWeek,
@@ -187,81 +200,183 @@ export const PrintModal: React.FC = () => {
   };
 
   const handleDownloadWordDocxFromPreview = async () => {
-    switch (printDocKey) {
-      case 'cover':
-        await exportCoverAndPengesahanToWord(
-          schoolProfile,
-          { nomorDokumen: '421.5/082/SMK-M1/2026' },
-          `COVER_PENGESAHAN_DAFTAR_ISI_${cleanSubject}_${cleanYear}.docx`
-        );
-        break;
-      case 'cp_atp':
-        await exportCpAtpToWord(
-          cpElements,
-          tujuanPembelajaran,
-          schoolProfile,
-          `ANALISIS_CP_ATP_${cleanSubject}_FASE_${schoolProfile.fase}.docx`
-        );
-        break;
-      case 'prota':
-        await exportProtaToWord(prota, schoolProfile, `PROTA_${cleanSubject}_${cleanYear}.docx`);
-        break;
-      case 'promes':
-        await exportPromesToWord(
-          promes,
-          schoolProfile,
-          selectedSemester,
-          `PROMES_SEMESTER_${selectedSemester === 'both' ? '1_DAN_2' : selectedSemester}_${cleanSubject}_${cleanYear}.docx`
-        );
-        break;
-      case 'rpe':
-        await exportRpeToWord(
-          rpe,
-          schoolProfile,
-          `RPE_${cleanSubject}_${cleanYear}.docx`,
-          { kaldikEvents, prota, promes }
-        );
-        break;
-      case 'kaldik':
-        await exportKaldikToWord(kaldikEvents, schoolProfile, `KALDIK_${cleanSubject}_${cleanYear}.docx`);
-        break;
-      case 'bloom':
-        await exportBloomToWord(
-          tujuanPembelajaran,
-          schoolProfile,
-          `ANALISIS_BLOOM_HOTS_${cleanSubject}_${cleanYear}.docx`
-        );
-        break;
-      case 'modul_ajar':
-        {
-          const filterList = selectedPrintBab === 'all'
-            ? modulAjarList
-            : modulAjarList.filter((m) => m.babNumber === selectedPrintBab);
-          const ptmLabel = selectedPrintPertemuan !== 'all' ? `_PERTEMUAN_${selectedPrintPertemuan}` : '';
-          const babLabel = selectedPrintBab !== 'all' ? `_BAB_${selectedPrintBab}` : '';
-          await exportModulAjarToWord(
-            filterList,
+    try {
+      switch (printDocKey) {
+        case 'cover':
+          await exportCoverAndPengesahanToWord(
             schoolProfile,
-            `MODUL_AJAR_DEEP_LEARNING_${cleanSubject}${babLabel}${ptmLabel}_${cleanYear}.docx`,
-            selectedPrintPertemuan,
-            selectedPrintInstruments
+            { nomorDokumen: '421.5/082/SMK-M1/2026' },
+            `COVER_PENGESAHAN_DAFTAR_ISI_${cleanSubject}_${cleanYear}.docx`
           );
-        }
-        break;
-      case 'lkpd':
-        await exportLkpdToWord(lkpdList, schoolProfile, `LKPD_LENGKAP_${cleanSubject}_${cleanYear}.docx`);
-        break;
-      case 'asesmen':
-        await exportAsesmenToWord(
-          students,
-          schoolProfile,
-          `REKAP_NILAI_ASESMEN_RAPOR_${cleanSubject}_${cleanYear}.docx`
-        );
-        break;
-      case 'bundel':
-      default:
-        await exportMasterBundelToWord(
+          break;
+        case 'cp_atp':
+          await exportCpAtpToWord(
+            cpElements,
+            tujuanPembelajaran,
+            schoolProfile,
+            `ANALISIS_CP_ATP_${cleanSubject}_FASE_${schoolProfile.fase}.docx`
+          );
+          break;
+        case 'prota':
+          await exportProtaToWord(prota, schoolProfile, `PROTA_${cleanSubject}_${cleanYear}.docx`);
+          break;
+        case 'promes':
+          await exportPromesToWord(
+            promes,
+            schoolProfile,
+            selectedSemester,
+            `PROMES_SEMESTER_${selectedSemester === 'both' ? '1_DAN_2' : selectedSemester}_${cleanSubject}_${cleanYear}.docx`
+          );
+          break;
+        case 'rpe':
+          await exportRpeToWord(
+            rpe,
+            schoolProfile,
+            `RPE_${cleanSubject}_${cleanYear}.docx`,
+            { kaldikEvents, prota, promes }
+          );
+          break;
+        case 'kaldik':
+          await exportKaldikToWord(kaldikEvents, schoolProfile, `KALDIK_${cleanSubject}_${cleanYear}.docx`);
+          break;
+        case 'bloom':
+          await exportBloomToWord(
+            tujuanPembelajaran,
+            schoolProfile,
+            `ANALISIS_BLOOM_HOTS_${cleanSubject}_${cleanYear}.docx`
+          );
+          break;
+        case 'modul_ajar':
           {
+            const filterList = selectedPrintBab === 'all'
+              ? modulAjarList
+              : modulAjarList.filter((m) => m.babNumber === selectedPrintBab);
+            const ptmLabel = selectedPrintPertemuan !== 'all' ? `_PERTEMUAN_${selectedPrintPertemuan}` : '';
+            const babLabel = selectedPrintBab !== 'all' ? `_BAB_${selectedPrintBab}` : '';
+            await exportModulAjarToWord(
+              filterList,
+              schoolProfile,
+              `MODUL_AJAR_DEEP_LEARNING_${cleanSubject}${babLabel}${ptmLabel}_${cleanYear}.docx`,
+              selectedPrintPertemuan,
+              selectedPrintInstruments
+            );
+          }
+          break;
+        case 'lkpd':
+          await exportLkpdToWord(lkpdList, schoolProfile, `LKPD_LENGKAP_${cleanSubject}_${cleanYear}.docx`);
+          break;
+        case 'asesmen':
+          await exportAsesmenToWord(
+            students,
+            schoolProfile,
+            `REKAP_NILAI_ASESMEN_RAPOR_${cleanSubject}_${cleanYear}.docx`
+          );
+          break;
+        case 'bundel':
+        default:
+          await exportMasterBundelToWord(
+            {
+              profile: schoolProfile,
+              cpElements,
+              tujuanPembelajaran,
+              rpe,
+              prota,
+              promes,
+              modulAjarList,
+              lkpdList,
+              students,
+              kaldikEvents,
+            },
+            `BUNDEL_MASTER_LENGKAP_1TAHUN_${cleanSubject}_${cleanYear}.docx`
+          );
+          break;
+      }
+      showNotification(
+        'success',
+        'Dokumen Word (.docx) berhasil diunduh dengan struktur tabel persis seperti pratinjau layar!'
+      );
+    } catch (err: any) {
+      showNotification(
+        'error',
+        `Gagal mengunduh dokumen Word (.docx): ${err?.message || 'Terjadi kesalahan.'}`
+      );
+    }
+  };
+
+  const handleDownloadUniversalDoc = () => {
+    try {
+      const docTitle = (printDocKey || 'DOKUMEN').toUpperCase();
+      exportPreviewDomToUniversalWord(
+        'printable-preview-canvas',
+        `${docTitle}_${cleanSubject}_${cleanYear}.doc`
+      );
+      showNotification(
+        'success',
+        'Dokumen Word Universal (.doc) berhasil diunduh (Suport Semua Versi MS Word 2003–365 & WPS)!'
+      );
+    } catch (err: any) {
+      showNotification(
+        'error',
+        `Gagal mengunduh Word (.doc): ${err?.message || 'Terjadi kesalahan.'}`
+      );
+    }
+  };
+
+  const handleDownloadExcelFromPreview = () => {
+    try {
+      switch (printDocKey) {
+        case 'cp_atp':
+          exportCpAtpToExcel(cpElements, tujuanPembelajaran, schoolProfile, rpe);
+          break;
+        case 'prota':
+          exportProtaToExcel(prota, schoolProfile);
+          break;
+        case 'promes':
+          exportPromesToExcel(promes, schoolProfile, selectedSemester);
+          break;
+        case 'rpe':
+          exportRpeToExcel(rpe, schoolProfile, { kaldikEvents, prota, promes });
+          break;
+        case 'kaldik':
+          exportKaldikToExcel(kaldikEvents, schoolProfile);
+          break;
+        case 'bloom':
+          exportBloomToExcel(tujuanPembelajaran, schoolProfile);
+          break;
+        case 'modul_ajar':
+          {
+            const filterList = selectedPrintBab === 'all'
+              ? modulAjarList
+              : modulAjarList.filter((m) => m.babNumber === selectedPrintBab);
+            exportModulAjarToExcel(
+              filterList,
+              schoolProfile,
+              selectedPrintPertemuan,
+              selectedPrintInstruments
+            );
+          }
+          break;
+        case 'lkpd':
+          exportLkpdToExcel(lkpdList, schoolProfile);
+          break;
+        case 'asesmen':
+          exportGradesToExcel(students, schoolProfile);
+          break;
+        case 'analisis_perangkat':
+          exportAnalisisPerangkatToExcel(
+            schoolProfile,
+            prota,
+            promes,
+            modulAjarList,
+            lkpdList,
+            students,
+            rpe
+          );
+          break;
+        case 'cover':
+        case 'bundel':
+        default:
+          exportMasterBundelToExcel({
             profile: schoolProfile,
             cpElements,
             tujuanPembelajaran,
@@ -272,100 +387,19 @@ export const PrintModal: React.FC = () => {
             lkpdList,
             students,
             kaldikEvents,
-          },
-          `BUNDEL_MASTER_LENGKAP_1TAHUN_${cleanSubject}_${cleanYear}.docx`
-        );
-        break;
+          });
+          break;
+      }
+      showNotification(
+        'success',
+        'Data berhasil diekspor ke Spreadsheet Excel (.xlsx) lengkap dengan identitas tersinkronisasi!'
+      );
+    } catch (err: any) {
+      showNotification(
+        'error',
+        `Gagal mengekspor Spreadsheet Excel: ${err?.message || 'Terjadi kesalahan.'}`
+      );
     }
-    showNotification(
-      'success',
-      'Dokumen Word (.docx) berhasil diunduh dengan struktur tabel persis seperti pratinjau layar!'
-    );
-  };
-
-  const handleDownloadUniversalDoc = () => {
-    const docTitle = (printDocKey || 'DOKUMEN').toUpperCase();
-    exportPreviewDomToUniversalWord(
-      'printable-preview-canvas',
-      `${docTitle}_${cleanSubject}_${cleanYear}.doc`
-    );
-    showNotification(
-      'success',
-      'Dokumen Word Universal (.doc) berhasil diunduh (Suport Semua Versi MS Word 2003–365 & WPS)!'
-    );
-  };
-
-  const handleDownloadExcelFromPreview = () => {
-    switch (printDocKey) {
-      case 'cp_atp':
-        exportCpAtpToExcel(cpElements, tujuanPembelajaran, schoolProfile, rpe);
-        break;
-      case 'prota':
-        exportProtaToExcel(prota, schoolProfile);
-        break;
-      case 'promes':
-        exportPromesToExcel(promes, schoolProfile, selectedSemester);
-        break;
-      case 'rpe':
-        exportRpeToExcel(rpe, schoolProfile, { kaldikEvents, prota, promes });
-        break;
-      case 'kaldik':
-        exportKaldikToExcel(kaldikEvents, schoolProfile);
-        break;
-      case 'bloom':
-        exportBloomToExcel(tujuanPembelajaran, schoolProfile);
-        break;
-      case 'modul_ajar':
-        {
-          const filterList = selectedPrintBab === 'all'
-            ? modulAjarList
-            : modulAjarList.filter((m) => m.babNumber === selectedPrintBab);
-          exportModulAjarToExcel(
-            filterList,
-            schoolProfile,
-            selectedPrintPertemuan,
-            selectedPrintInstruments
-          );
-        }
-        break;
-      case 'lkpd':
-        exportLkpdToExcel(lkpdList, schoolProfile);
-        break;
-      case 'asesmen':
-        exportGradesToExcel(students, schoolProfile);
-        break;
-      case 'analisis_perangkat':
-        exportAnalisisPerangkatToExcel(
-          schoolProfile,
-          prota,
-          promes,
-          modulAjarList,
-          lkpdList,
-          students,
-          rpe
-        );
-        break;
-      case 'cover':
-      case 'bundel':
-      default:
-        exportMasterBundelToExcel({
-          profile: schoolProfile,
-          cpElements,
-          tujuanPembelajaran,
-          rpe,
-          prota,
-          promes,
-          modulAjarList,
-          lkpdList,
-          students,
-          kaldikEvents,
-        });
-        break;
-    }
-    showNotification(
-      'success',
-      'Data berhasil diekspor ke Spreadsheet Excel (.xlsx) lengkap dengan identitas tersinkronisasi!'
-    );
   };
 
   return (
@@ -746,15 +780,15 @@ export const PrintModal: React.FC = () => {
                   <tbody className="text-[11px]">
                     {[
                       { romawi: 'I', title: 'Sampul Resmi (Cover) & Lembar Pengesahan', desc: 'Identitas & Legalitas KS' },
-                      { romawi: 'II', title: 'Kalender Pendidikan (Kaldik) Tahun Ajaran 2026/2027', desc: 'Semester 1 & Semester 2' },
-                      { romawi: 'III', title: 'Rincian Pekan Efektif (RPE) & Distribusi Jam', desc: '39 Pekan Efektif / 132 JP' },
-                      { romawi: 'IV', title: 'Analisis Capaian Pembelajaran (CP) & Alur Tujuan (ATP)', desc: '7 Tujuan Pembelajaran' },
-                      { romawi: 'V', title: 'Analisis Taksonomi Bloom & Pemetaan HOTS (C1–C6)', desc: '71% Kategori HOTS' },
-                      { romawi: 'VI', title: 'Program Tahunan (PROTA) Kurikulum Merdeka', desc: 'Alokasi 132 JP (1 Tahun)' },
-                      { romawi: 'VII', title: 'Program Semester (PROMES) Ganjil & Genap', desc: 'Matriks Sebaran Mingguan' },
-                      { romawi: 'VIII', title: 'Modul Ajar Terpadu & Deep Learning (Mindful, Meaningful, Joyful)', desc: '7 Unit Modul Berdiferensiasi' },
-                      { romawi: 'IX', title: 'Lembar Kerja Peserta Didik (LKPD) Setiap Pertemuan', desc: '7 Bab + Kunci Jawaban' },
-                      { romawi: 'X', title: 'Instrumen Asesmen, Rubrik KKTP, & Rekap Nilai Rapor', desc: 'Formatif, Sumatif & Rapor' },
+                      { romawi: 'II', title: `Kalender Pendidikan (Kaldik) Tahun Ajaran ${schoolProfile.academicYear}`, desc: `${kaldikEvents.length} Agenda · Semester 1 & 2` },
+                      { romawi: 'III', title: 'Rincian Pekan Efektif (RPE) & Distribusi Jam', desc: `${unifiedRpeSnapshot.annualSummary.effectiveWeeks} Pekan · ${unifiedRpeSnapshot.annualSummary.effectiveMeetings} Pertemuan / ${unifiedRpeSnapshot.annualSummary.grossJp} JP` },
+                      { romawi: 'IV', title: 'Analisis Capaian Pembelajaran (CP) & Alur Tujuan (ATP)', desc: `${tujuanPembelajaran.length} Tujuan Pembelajaran` },
+                      { romawi: 'V', title: 'Analisis Taksonomi Bloom & Pemetaan HOTS (C1–C6)', desc: `${bloomStats.hotsPercentage}% Kategori HOTS` },
+                      { romawi: 'VI', title: 'Program Tahunan (PROTA) & Alokasi Waktu TP', desc: `Alokasi ${totalProtaJp} JP (${unifiedRpeSnapshot.tpSummary.totalMeetings} Pertemuan)` },
+                      { romawi: 'VII', title: 'Program Semester (PROMES) Ganjil & Genap', desc: `${promes.length} Unit Matriks Sebaran Mingguan` },
+                      { romawi: 'VIII', title: 'Modul Ajar Terpadu & Deep Learning (Mindful, Meaningful, Joyful)', desc: `${modulAjarList.length} Unit Modul Berdiferensiasi` },
+                      { romawi: 'IX', title: 'Lembar Kerja Peserta Didik (LKPD) Setiap Pertemuan', desc: `${lkpdList.length} Bab + Kunci Jawaban` },
+                      { romawi: 'X', title: 'Instrumen Asesmen, Rubrik KKTP, & Rekap Nilai Rapor', desc: `${students.length} Siswa · Formatif, Sumatif & Rapor` },
                     ].map((row) => (
                       <tr key={row.romawi}>
                         <td className="border border-slate-900 p-2 text-center font-bold font-mono">{row.romawi}</td>
@@ -787,30 +821,45 @@ export const PrintModal: React.FC = () => {
                     <th className="border border-slate-900 p-2">Bab / Lingkup Materi</th>
                     <th className="border border-slate-900 p-2 text-center w-16">Kode TP</th>
                     <th className="border border-slate-900 p-2">Tujuan Pembelajaran</th>
+                    <th className="border border-slate-900 p-2 text-center w-16">Pertemuan</th>
                     <th className="border border-slate-900 p-2 text-center w-14">JP</th>
-                    <th className="border border-slate-900 p-2 w-28">Keterangan</th>
+                    <th className="border border-slate-900 p-2 w-28">Perkiraan Bulan</th>
+                    <th className="border border-slate-900 p-2 w-24">Keterangan</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {prota.map((p, idx) => (
-                    <tr key={p.id}>
-                      <td className="border border-slate-900 p-2 text-center">{idx + 1}</td>
-                      <td className="border border-slate-900 p-2 text-center">Smt {p.semester}</td>
-                      <td className="border border-slate-900 p-2 font-bold">{p.babTitle}</td>
-                      <td className="border border-slate-900 p-2 text-center font-mono font-bold text-emerald-900">{p.tpCode}</td>
-                      <td className="border border-slate-900 p-2">{p.tpDescription}</td>
-                      <td className="border border-slate-900 p-2 text-center font-bold">{p.alokasiJp} JP</td>
-                      <td className="border border-slate-900 p-2 italic">{p.keterangan}</td>
-                    </tr>
-                  ))}
+                  {prota.map((p, idx) => {
+                    const meetings =
+                      p.jmlPertemuan !== undefined
+                        ? p.jmlPertemuan
+                        : Math.max(0, Math.round((Number(p.alokasiJp) || 0) / 2));
+                    return (
+                      <tr key={p.id}>
+                        <td className="border border-slate-900 p-2 text-center">{idx + 1}</td>
+                        <td className="border border-slate-900 p-2 text-center">Smt {p.semester}</td>
+                        <td className="border border-slate-900 p-2 font-bold">{p.babTitle}</td>
+                        <td className="border border-slate-900 p-2 text-center font-mono font-bold text-emerald-900">{p.tpCode}</td>
+                        <td className="border border-slate-900 p-2">{p.tpDescription}</td>
+                        <td className="border border-slate-900 p-2 text-center font-bold">{meetings}</td>
+                        <td className="border border-slate-900 p-2 text-center font-bold">{p.alokasiJp} JP</td>
+                        <td className="border border-slate-900 p-2">{p.perkiraanBulan || `Semester ${p.semester}`}</td>
+                        <td className="border border-slate-900 p-2 italic">{p.keterangan}</td>
+                      </tr>
+                    );
+                  })}
                   <tr className="font-bold bg-emerald-50">
                     <td colSpan={5} className="border border-slate-900 p-2 text-right">
                       TOTAL ALOKASI WAKTU 1 TAHUN AJARAN:
                     </td>
                     <td className="border border-slate-900 p-2 text-center">
-                      {prota.reduce((a, b) => a + b.alokasiJp, 0)} JP
+                      {unifiedRpeSnapshot.tpSummary.totalMeetings}
                     </td>
-                    <td className="border border-slate-900 p-2 text-emerald-900">✓ Selaras RPE</td>
+                    <td className="border border-slate-900 p-2 text-center">
+                      {totalProtaJp} JP
+                    </td>
+                    <td colSpan={2} className="border border-slate-900 p-2 text-emerald-900">
+                      ✓ Selaras RPE ({unifiedRpeSnapshot.annualSummary.grossJp} JP)
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1433,6 +1482,13 @@ export const PrintModal: React.FC = () => {
                       </table>
                     </div>
                   )}
+
+                  {/* Rekapitulasi 1 Tahun Ajaran */}
+                  <div className="border border-slate-900 bg-emerald-50 p-2.5 text-center font-bold text-emerald-950 text-[11px]">
+                    REKAPITULASI 1 TAHUN AJARAN: {rpePayload.annualSummary.effectiveWeeks} PEKAN EFEKTIF ·{' '}
+                    {rpePayload.annualSummary.effectiveMeetings} PERTEMUAN · TOTAL {rpePayload.annualSummary.grossJp} JP
+                    EFEKTIF (BERSIH {rpePayload.annualSummary.netJp} JP · CADANGAN {rpePayload.annualSummary.cadanganJp} JP)
+                  </div>
                 </div>
               );
             })()}
@@ -2553,31 +2609,37 @@ export const PrintModal: React.FC = () => {
             <div className="space-y-4 font-sans text-xs">
               <div className="text-center">
                 <h2 className="text-base font-bold uppercase">AGENDA KALENDER PENDIDIKAN TA {schoolProfile.academicYear}</h2>
-                <p className="text-xs text-slate-600">{schoolProfile.schoolName}</p>
+                <p className="text-xs text-slate-600">{schoolProfile.schoolName} · {kaldikEvents.length} Agenda Tersinkron</p>
               </div>
               {renderOfficialIdentitasTable(`${schoolProfile.academicYear} / Semester 1 & 2 (1 Tahun Penuh)`)}
               <table className="w-full border-collapse border border-slate-900 text-[11px]">
                 <thead>
                   <tr className="bg-slate-100 font-bold">
                     <th className="border border-slate-900 p-2 text-center w-10">No</th>
+                    <th className="border border-slate-900 p-2">Bulan</th>
                     <th className="border border-slate-900 p-2">Rentang Tanggal</th>
-                    <th className="border border-slate-900 p-2">Nama Kegiatan / Agenda</th>
-                    <th className="border border-slate-900 p-2 text-center">Kategori</th>
+                    <th className="border border-slate-900 p-2">Uraian Kegiatan / Hari Libur</th>
+                    <th className="border border-slate-900 p-2 text-center">Kategori Status</th>
                     <th className="border border-slate-900 p-2">Catatan</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {kaldikEvents.map((ev, idx) => (
-                    <tr key={ev.id}>
-                      <td className="border border-slate-900 p-2 text-center">{idx + 1}</td>
-                      <td className="border border-slate-900 p-2 font-mono">
-                        {ev.dateStart} {ev.dateEnd !== ev.dateStart ? `s.d. ${ev.dateEnd}` : ''}
-                      </td>
-                      <td className="border border-slate-900 p-2 font-bold">{ev.name}</td>
-                      <td className="border border-slate-900 p-2 text-center font-semibold">{ev.type.replace('_', ' ').toUpperCase()}</td>
-                      <td className="border border-slate-900 p-2">{ev.notes || '-'}</td>
-                    </tr>
-                  ))}
+                  {[...kaldikEvents]
+                    .sort((a, b) => (a.dateStart || '').localeCompare(b.dateStart || ''))
+                    .map((ev, idx) => (
+                      <tr key={ev.id}>
+                        <td className="border border-slate-900 p-2 text-center">{idx + 1}</td>
+                        <td className="border border-slate-900 p-2 font-bold">{getIndonesianMonthYearLabel(ev.dateStart)}</td>
+                        <td className="border border-slate-900 p-2">
+                          {formatDateRangeLabelId(ev.dateStart, ev.dateEnd)}
+                        </td>
+                        <td className="border border-slate-900 p-2 font-bold">{ev.name}</td>
+                        <td className="border border-slate-900 p-2 text-center font-semibold text-emerald-900">
+                          {formatKaldikCategoryExportLabel(ev.type)}
+                        </td>
+                        <td className="border border-slate-900 p-2">{ev.notes || '-'}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -2855,6 +2917,7 @@ export const PrintModal: React.FC = () => {
                 <h2 className="text-base font-bold uppercase">BUNDEL LENGKAP PERANGKAT MENGAJAR (1 TAHUN)</h2>
                 <p className="text-xs text-slate-600">Kompilasi 10 Berkas Administrasi Lengkap · Berlandaskan KepKa BSKAP No. 046/H/KR/2025, Permendikbudristek No. 12 Tahun 2024, Permendikbudristek Nomor 13 Tahun 2025, dan KMA No. 1503 Tahun 2025</p>
               </div>
+              {renderOfficialIdentitasTable(`${schoolProfile.academicYear} / Semester 1 & 2 (1 Tahun Penuh)`)}
               <table className="w-full border-collapse border border-slate-900 text-[11px]">
                 <thead>
                   <tr className="bg-slate-100 font-bold uppercase">
@@ -2866,14 +2929,14 @@ export const PrintModal: React.FC = () => {
                 <tbody>
                   {[
                     'Cover & Lembar Pengesahan Resmi (Kepala Sekolah & Guru Pengampu)',
-                    'Kalender Pendidikan & Rincian Pekan Efektif (RPE) 39 Pekan (132 JP)',
-                    'Analisis Capaian Pembelajaran (CP) dan Alur Tujuan Pembelajaran (ATP)',
-                    'Analisis Taksonomi Bloom HOTS & Matriks 2D Anderson-Krathwohl',
-                    'Program Tahunan (PROTA) 132 JP Bersih',
-                    'Program Semester (PROMES) Semester 1 & 2',
-                    'Modul Ajar Deep Learning (Unit Lengkap 3 Pilar & Tabel Rubrik KKTP)',
-                    'Lembar Kerja Peserta Didik (LKPD) Siap Ajar & Kunci Jawaban',
-                    'Buku Nilai & Rekapitulasi Rapor Peserta Didik (24 Siswa)',
+                    `Kalender Pendidikan (${kaldikEvents.length} Agenda) & RPE ${unifiedRpeSnapshot.annualSummary.effectiveWeeks} Pekan (${unifiedRpeSnapshot.annualSummary.effectiveMeetings} Pertemuan / ${unifiedRpeSnapshot.annualSummary.grossJp} JP)`,
+                    `Analisis Capaian Pembelajaran (CP) dan Alur Tujuan Pembelajaran (${tujuanPembelajaran.length} TP)`,
+                    `Analisis Taksonomi Bloom HOTS (${bloomStats.hotsPercentage}% HOTS) & Matriks 2D Anderson-Krathwohl`,
+                    `Program Tahunan (PROTA) & Program Alokasi Waktu TP (${totalProtaJp} JP · ${unifiedRpeSnapshot.tpSummary.totalMeetings} Pertemuan)`,
+                    `Program Semester (PROMES) Semester 1 & 2 (${promes.length} Unit Sebaran Mingguan)`,
+                    `Modul Ajar Deep Learning (${modulAjarList.length} Bab Unit Lengkap 3 Pilar & Rubrik KKTP)`,
+                    `Lembar Kerja Peserta Didik (LKPD) Siap Ajar & Kunci Jawaban (${lkpdList.length} Bab)`,
+                    `Buku Nilai & Rekapitulasi Rapor Peserta Didik (${students.length} Siswa)`,
                   ].map((docName, idx) => (
                     <tr key={idx}>
                       <td className="border border-slate-900 p-2 text-center font-bold">{idx + 1}</td>
@@ -2884,10 +2947,51 @@ export const PrintModal: React.FC = () => {
                 </tbody>
               </table>
 
-              {/* Embedded Elemen CP & Matriks ATP in Bundel Preview */}
+              {/* Embedded Kalender Pendidikan & RPE 12 Bulan in Bundel Preview */}
               <div className="space-y-3 pt-2">
                 <h3 className="text-xs font-black uppercase text-slate-900 border-b border-slate-900 pb-1">
-                  LAMPIRAN I: ELEMEN CAPAIAN PEMBELAJARAN RESMI BSKAP 046/2025
+                  LAMPIRAN I: ANALISIS MINGGU EFEKTIF &amp; PERTEMUAN EFEKTIF 12 BULAN (RPE)
+                </h3>
+                <table className="w-full border-collapse border border-slate-900 text-[11px]">
+                  <thead>
+                    <tr className="bg-emerald-900 text-white font-bold text-[10px] uppercase">
+                      <th className="border border-slate-900 p-1.5 text-center w-8">No</th>
+                      <th className="border border-slate-900 p-1.5 text-left">Bulan</th>
+                      <th className="border border-slate-900 p-1.5 text-center">Jml Mgg</th>
+                      <th className="border border-slate-900 p-1.5 text-center">Non-Efektif</th>
+                      <th className="border border-slate-900 p-1.5 text-center">Mgg Efektif</th>
+                      <th className="border border-slate-900 p-1.5 text-center">Pertemuan</th>
+                      <th className="border border-slate-900 p-1.5 text-center">Total JP</th>
+                      <th className="border border-slate-900 p-1.5 text-left">Keterangan / Agenda</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unifiedRpeSnapshot.twelveMonthRows.map((row) => (
+                      <tr key={row.no}>
+                        <td className="border border-slate-900 p-1.5 text-center">{row.no}</td>
+                        <td className="border border-slate-900 p-1.5 font-bold">{row.month}</td>
+                        <td className="border border-slate-900 p-1.5 text-center">{row.totalWeeks}</td>
+                        <td className="border border-slate-900 p-1.5 text-center text-rose-700 font-bold">{row.nonEffectiveWeeks}</td>
+                        <td className="border border-slate-900 p-1.5 text-center text-emerald-800 font-bold">{row.effectiveWeeks}</td>
+                        <td className="border border-slate-900 p-1.5 text-center text-emerald-800 font-bold">{row.effectiveMeetings}</td>
+                        <td className="border border-slate-900 p-1.5 text-center text-blue-800 font-bold">{row.effectiveJp} JP</td>
+                        <td className="border border-slate-900 p-1.5">{row.note}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-emerald-50 font-bold">
+                      <td colSpan={2} className="border border-slate-900 p-2 text-right">JUMLAH TOTAL (12 BULAN)</td>
+                      <td className="border border-slate-900 p-2 text-center">{unifiedRpeSnapshot.annualSummary.totalWeeks}</td>
+                      <td className="border border-slate-900 p-2 text-center text-rose-700">{unifiedRpeSnapshot.annualSummary.nonEffectiveWeeks}</td>
+                      <td className="border border-slate-900 p-2 text-center">{unifiedRpeSnapshot.annualSummary.effectiveWeeks} Mgg</td>
+                      <td className="border border-slate-900 p-2 text-center">{unifiedRpeSnapshot.annualSummary.effectiveMeetings} Kali</td>
+                      <td className="border border-slate-900 p-2 text-center">{unifiedRpeSnapshot.annualSummary.grossJp} JP</td>
+                      <td className="border border-slate-900 p-2">Bersih: {unifiedRpeSnapshot.annualSummary.netJp} JP (Jadwal: {unifiedRpeSnapshot.selectedDays.join(', ')})</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <h3 className="text-xs font-black uppercase text-slate-900 border-b border-slate-900 pb-1 pt-2">
+                  LAMPIRAN II: ELEMEN CAPAIAN PEMBELAJARAN RESMI BSKAP 046/2025
                 </h3>
                 <table className="w-full border-collapse border border-slate-900 text-[11px]">
                   <thead>
@@ -2911,7 +3015,7 @@ export const PrintModal: React.FC = () => {
                 </table>
 
                 <h3 className="text-xs font-black uppercase text-slate-900 border-b border-slate-900 pb-1 pt-2">
-                  LAMPIRAN II: MATRIKS ALUR TUJUAN PEMBELAJARAN (ATP) 1 TAHUN AJARAN
+                  LAMPIRAN III: MATRIKS ALUR TUJUAN PEMBELAJARAN (ATP) 1 TAHUN AJARAN
                 </h3>
                 <table className="w-full border-collapse border border-slate-900 text-[11px]">
                   <thead>
@@ -2949,7 +3053,7 @@ export const PrintModal: React.FC = () => {
                 </table>
 
                 <h3 className="text-xs font-black uppercase text-slate-900 border-b border-slate-900 pb-1 pt-2">
-                  LAMPIRAN III: PROGRAM TAHUNAN (PROTA) 132 JP
+                  LAMPIRAN IV: PROGRAM TAHUNAN (PROTA) &amp; PROGRAM ALOKASI WAKTU TP ({totalProtaJp} JP)
                 </h3>
                 <table className="w-full border-collapse border border-slate-900 text-[11px]">
                   <thead>
@@ -2959,20 +3063,37 @@ export const PrintModal: React.FC = () => {
                       <th className="border border-slate-900 p-2">Bab / Lingkup Materi</th>
                       <th className="border border-slate-900 p-2 text-center w-16">Kode</th>
                       <th className="border border-slate-900 p-2">Tujuan Pembelajaran</th>
+                      <th className="border border-slate-900 p-2 text-center w-14">Pertemuan</th>
                       <th className="border border-slate-900 p-2 text-center w-14">JP</th>
+                      <th className="border border-slate-900 p-2 w-28">Perkiraan Bulan</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {prota.map((p, idx) => (
-                      <tr key={p.id}>
-                        <td className="border border-slate-900 p-2 text-center">{idx + 1}</td>
-                        <td className="border border-slate-900 p-2 text-center">{p.semester}</td>
-                        <td className="border border-slate-900 p-2 font-bold">{p.babTitle}</td>
-                        <td className="border border-slate-900 p-2 text-center font-mono">{p.tpCode}</td>
-                        <td className="border border-slate-900 p-2">{p.tpDescription}</td>
-                        <td className="border border-slate-900 p-2 text-center font-bold">{p.alokasiJp}</td>
-                      </tr>
-                    ))}
+                    {unifiedRpeSnapshot.tpRows.map((row) => {
+                      const matched = prota[row.no - 1];
+                      return (
+                        <tr key={row.no}>
+                          <td className="border border-slate-900 p-2 text-center">{row.no}</td>
+                          <td className="border border-slate-900 p-2 text-center">Smt {row.semester}</td>
+                          <td className="border border-slate-900 p-2 font-bold">{matched?.babTitle || row.lingkupMateri}</td>
+                          <td className="border border-slate-900 p-2 text-center font-mono">{row.tpCode}</td>
+                          <td className="border border-slate-900 p-2">{matched?.tpDescription || row.lingkupMateri}</td>
+                          <td className="border border-slate-900 p-2 text-center font-bold">{row.jmlPertemuan}</td>
+                          <td className="border border-slate-900 p-2 text-center font-bold">{row.alokasiJp} JP</td>
+                          <td className="border border-slate-900 p-2">{row.perkiraanBulan}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="bg-emerald-50 font-bold">
+                      <td colSpan={5} className="border border-slate-900 p-2 text-right">TOTAL ALOKASI WAKTU PROTA / TP</td>
+                      <td className="border border-slate-900 p-2 text-center">{unifiedRpeSnapshot.tpSummary.totalMeetings}</td>
+                      <td className="border border-slate-900 p-2 text-center">{unifiedRpeSnapshot.tpSummary.totalAllocatedJp} JP</td>
+                      <td className="border border-slate-900 p-2">
+                        {unifiedRpeSnapshot.tpSummary.isBalanced
+                          ? 'Seimbang ✓'
+                          : `Terpakai ${unifiedRpeSnapshot.tpSummary.totalAllocatedJp}/${unifiedRpeSnapshot.tpSummary.targetEffectiveJp} JP`}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
