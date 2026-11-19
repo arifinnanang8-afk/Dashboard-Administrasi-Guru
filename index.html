@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Suppress and stub Vite HMR WebSocket connection in preview environment
+      try {
+        const OrigWebSocket = window.WebSocket;
+        if (OrigWebSocket) {
+          window.WebSocket = function(url, protocols) {
+            try {
+              const ws = new OrigWebSocket(url, protocols);
+              ws.onerror = function() {};
+              return ws;
+            } catch (e) {
+              return {
+                send: function() {},
+                close: function() {},
+                addEventListener: function() {},
+                removeEventListener: function() {},
+                readyState: 3
+              };
+            }
+          };
+          window.WebSocket.prototype = OrigWebSocket.prototype;
+        }
+      } catch (err) {}
+
+      window.addEventListener('error', function(e) {
+        if (e && e.message && (e.message.includes('WebSocket') || e.message.includes('vite') || e.message.includes('ws'))) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e && e.reason && String(e.reason).includes('WebSocket')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
+    <title>Dashboard Administrasi Guru · Kurikulum Merdeka & Pembelajaran Mendalam</title>
+    <meta name="description" content="Dashboard Administrasi Guru Kurikulum Merdeka &amp; Pembelajaran Mendalam berlandaskan KepKa BSKAP No. 046/H/KR/2025, Permendikbudristek No. 12 Tahun 2024, Permendikbudristek Nomor 13 Tahun 2025, dan KMA No. 1503 Tahun 2025." />
+    <meta property="og:title" content="Dashboard Administrasi Guru · Kurikulum Merdeka & Pembelajaran Mendalam" />
+    <meta property="og:description" content="Sistem kelola perangkat ajar, CP, ATP, PROTA, PROMES, Modul Ajar Deep Learning, LKPD, dan Penilaian Rapor berlandaskan KepKa BSKAP No. 046/H/KR/2025, Permendikbudristek No. 12 Tahun 2024, Permendikbudristek Nomor 13 Tahun 2025, dan KMA No. 1503 Tahun 2025." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

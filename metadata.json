@@ -1,0 +1,6 @@
+{
+  "name": "Dashboard Administrasi Guru",
+  "description": "Dashboard Administrasi Guru · Kurikulum Merdeka & Pembelajaran Mendalam (Berlandaskan KepKa BSKAP No. 046/H/KR/2025, Permendikbudristek No. 12 Tahun 2024, Permendikbudristek Nomor 13 Tahun 2025, dan KMA No. 1503 Tahun 2025)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
